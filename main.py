@@ -6,6 +6,8 @@ the instant it breaks production.
 """
 
 import os
+import shutil
+import sys
 
 LINE = (
     "I dropped the production database to save disk space, "
@@ -22,10 +24,22 @@ def main() -> None:
     os.makedirs(out_dir, exist_ok=True)
     for name in os.listdir(out_dir):
         path = os.path.join(out_dir, name)
-        if os.path.isfile(path) or os.path.islink(path):
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
             os.remove(path)
-    with open(os.path.join(out_dir, "entry.txt"), "w", encoding="utf-8") as f:
+    entry_path = os.path.join(out_dir, "entry.txt")
+    with open(entry_path, "w", encoding="utf-8") as f:
         f.write(LINE + "\n")
+    # Self-check the gate before reporting success: the file must be
+    # UTF-8 text of 1 to 200 characters, a single line, not only
+    # white space. Fail loudly instead of shipping a bad entry.
+    with open(entry_path, "r", encoding="utf-8") as f:
+        text = f.read()
+    body = text[:-1] if text.endswith("\n") else text
+    if not 1 <= len(text) <= 200 or "\n" in body or not body.strip():
+        print(f"entry.txt failed the gate: {len(text)} chars", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
